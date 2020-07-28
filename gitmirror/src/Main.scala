@@ -68,12 +68,9 @@ case class Repository(githubUrl: String,
   }
 
   def mirror = {
-    if (os.isDir(wd)) {
-      println(s"${this.toString} already exists.")
-    } else {
+    if (!os.isDir(wd)) {
       gitClone
       gitlabCreateProject(user, repo)
-      println(s"done mirror ${this.toString}")
     }
     sync
   }
@@ -149,5 +146,6 @@ object Main extends App {
   tasks.map(r => config("action").strOpt.getOrElse("clone") match {
     case "clone" => r.gitClone
     case "mirror" => r.mirror
+    case "sync" => r.sync
   })
 }
