@@ -148,21 +148,20 @@ object Main extends App {
 
   val config = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
 
-  val githubUrl = config.getOrElse("githubUrl", Str("github.com")).str
-  val gitlabUrl = config.getOrElse("gitlabUrl", Str("localhost")).str
-  val githubToken = config.getOrElse("githubToken", Str("")).str
-  val gitlabToken = config.getOrElse("gitlabToken", Str("")).str
-  val githubSSHKey = os.temp(sshString(config.getOrElse("githubSSHKey", Str("")).str)).toString
-  val gitlabSSHKey = os.temp(sshString(config.getOrElse("gitlabSSHKey", Str("")).str)).toString
-  val mirrorDirectory = os.Path(config.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
-  val originationRepos = config.getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
-  val standaloneRepos = config.getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
-  val tasks = (originationRepos ++ standaloneRepos).par
-  val action = config.getOrElse("action", Str("clone")).str
-  val threads = config.getOrElse("threads", Num(64.0)).num.toInt
-
-  val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
-  val githubAPI = s"https://api.$githubUrl"
+  lazy val githubUrl = config.getOrElse("githubUrl", Str("github.com")).str
+  lazy val gitlabUrl = config.getOrElse("gitlabUrl", Str("localhost")).str
+  lazy val githubToken = config.getOrElse("githubToken", Str("")).str
+  lazy val gitlabToken = config.getOrElse("gitlabToken", Str("")).str
+  lazy val githubSSHKey = os.temp(sshString(config.getOrElse("githubSSHKey", Str("")).str)).toString
+  lazy val gitlabSSHKey = os.temp(sshString(config.getOrElse("gitlabSSHKey", Str("")).str)).toString
+  lazy val mirrorDirectory = os.Path(config.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
+  lazy val originationRepos = config.getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
+  lazy val standaloneRepos = config.getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
+  lazy val tasks = (originationRepos ++ standaloneRepos).par
+  lazy val action = config.getOrElse("action", Str("clone")).str
+  lazy val threads = config.getOrElse("threads", Num(64.0)).num.toInt
+  lazy val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
+  lazy val githubAPI = s"https://api.$githubUrl"
 
   val forkJoinPool = new java.util.concurrent.ForkJoinPool(threads)
   tasks.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
