@@ -61,6 +61,7 @@ case class Repository(githubUrl: String,
   def gitlabSSHUrl = s"git@$gitlabUrl:$user/$repo.git"
 
   def gitClone = {
+    os.remove.all(wd)
     os.makeDir.all(wd)
     os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString).call(wd, env = Map(
       "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey -o IdentitiesOnly=yes"
@@ -68,7 +69,7 @@ case class Repository(githubUrl: String,
   }
 
   def mirror = {
-    if (!os.isDir(wd)) {
+    if (!os.isFile(wd / "config")) {
       gitClone
       gitlabCreateProject(user, repo)
     }
