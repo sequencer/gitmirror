@@ -82,7 +82,7 @@ case class Repository(githubUrl: String,
     os.proc("git", "fetch", "--all").call(wd, env = Map(
       "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey -o IdentitiesOnly=yes"
     ))
-    os.proc("git", "push", "--mirror", gitlabSSHUrl).call(wd, env = Map(
+    os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = Map(
       "GIT_SSH_COMMAND" -> s"ssh -i $gitlabSSHKey -o IdentitiesOnly=yes"
     ))
   }
