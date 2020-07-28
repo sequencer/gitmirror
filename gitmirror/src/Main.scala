@@ -1,6 +1,7 @@
 package gitmirror
 
 import scala.collection.parallel.CollectionConverters._
+import scala.collection.parallel.ForkJoinTaskSupport
 
 case class Repository(githubUrl: String,
                       gitlabUrl: String,
@@ -60,6 +61,7 @@ case class Repository(githubUrl: String,
   def gitlabSSHUrl = s"git@$gitlabUrl:$user/$repo.git"
 
   def gitClone = {
+    os.makeDir.all(wd)
     os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString).call(wd, env = Map(
       "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey -o IdentitiesOnly=yes"
     ))
@@ -69,7 +71,6 @@ case class Repository(githubUrl: String,
     if (os.isDir(wd)) {
       println(s"${this.toString} already exists.")
     } else {
-      os.makeDir.all(wd)
       gitClone
       gitlabCreateProject(user, repo)
       println(s"done mirror ${this.toString}")
@@ -136,11 +137,17 @@ object Main extends App {
       repo = repo
     )
   }
+
   val config = ujson.read(os.read(os.Path(args(0), os.pwd)))
+  val forkJoinPool = new java.util.concurrent.ForkJoinPool(config("threads").numOpt.getOrElse(32.0).toInt)
   val githubUrl = config("githubUrl").str
   val githubAPI = s"https://api.$githubUrl"
   val githubToken = config("githubToken").str
   val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
-
-  (config("origination").arr.map(_.str).flatMap(repos) ++ config("repository").arr.map(_.str).map(r => repos(r.split('/')))).par.map(_.gitClone)
+  val tasks = (config("origination").arr.map(_.str).flatMap(repos) ++ config("repository").arr.map(_.str).map(r => repos(r.split('/')))).par
+  tasks.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
+  tasks.map(r => config("action").strOpt.getOrElse("clone") match {
+    case "clone" => r.gitClone
+    case "mirror" => r.mirror
+  })
 }
