@@ -144,7 +144,7 @@ object Main extends App {
     )
   }
 
-  def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----"
+  def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----\n"
 
   val config = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
 
