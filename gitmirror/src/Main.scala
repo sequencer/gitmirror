@@ -1,5 +1,7 @@
 package gitmirror
 
+import ujson._
+
 import scala.collection.parallel.CollectionConverters._
 import scala.collection.parallel.ForkJoinTaskSupport
 
@@ -56,33 +58,39 @@ case class Repository(githubUrl: String,
 
   val wd = mirrorDirectory / user / repo
 
+  val githubSSHEnv = Map(
+    "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey"
+  )
+
+  val gitlabSSHEnv = Map(
+    "GIT_SSH_COMMAND" -> s"ssh -i $gitlabSSHKey"
+  )
+
   def githubSSHUrl = s"git@$githubUrl:$user/$repo.git"
 
   def gitlabSSHUrl = s"git@$gitlabUrl:$user/$repo.git"
 
-  def gitClone = {
-    os.remove.all(wd)
-    os.makeDir.all(wd)
-    os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString).call(wd, env = Map(
-      "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey -o IdentitiesOnly=yes"
-    ))
-  }
-
   def mirror = {
     if (!os.isFile(wd / "config")) {
-      gitClone
+      githubClone
       gitlabCreateProject(user, repo)
     }
-    sync
+    gitlabPush
   }
 
+  def githubClone = {
+    os.remove.all(wd)
+    os.makeDir.all(wd)
+    os.proc("git", "clone", "--mirror", githubSSHUrl, wd.toString).call(wd, env = githubSSHEnv)
+  }
+
+  def githubFetch = os.proc("git", "fetch", "--all").call(wd, env = githubSSHEnv)
+
+  def gitlabPush = os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = gitlabSSHEnv)
+
   def sync = {
-    os.proc("git", "fetch", "--all").call(wd, env = Map(
-      "GIT_SSH_COMMAND" -> s"ssh -i $githubSSHKey -o IdentitiesOnly=yes"
-    ))
-    os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = Map(
-      "GIT_SSH_COMMAND" -> s"ssh -i $gitlabSSHKey -o IdentitiesOnly=yes"
-    ))
+    githubFetch
+    gitlabPush
   }
 }
 
@@ -105,13 +113,13 @@ object Main extends App {
         headers = githubAPIHeaders
       ).bytes).arr.map(r =>
         Repository(
-          githubUrl = config("githubUrl").str,
-          gitlabUrl = config("gitlabUrl").str,
-          githubToken = config("githubToken").str,
-          gitlabToken = config("gitlabToken").str,
-          githubSSHKey = os.temp(config("githubSSHKey").str).toString,
-          gitlabSSHKey = os.temp(config("gitlabSSHKey").str).toString,
-          mirrorDirectory = os.Path(config("mirrorDirectory").str),
+          githubUrl = githubUrl,
+          gitlabUrl = gitlabUrl,
+          githubToken = githubToken,
+          gitlabToken = gitlabToken,
+          githubSSHKey = githubSSHKey,
+          gitlabSSHKey = gitlabSSHKey,
+          mirrorDirectory = mirrorDirectory,
           user = origination,
           repo = r("name").str
         )
@@ -124,28 +132,44 @@ object Main extends App {
     val user = userrepo.head
     val repo = userrepo.last
     Repository(
-      githubUrl = config("githubUrl").str,
-      gitlabUrl = config("gitlabUrl").str,
-      githubToken = config("githubToken").str,
-      gitlabToken = config("gitlabToken").str,
-      githubSSHKey = os.temp(config("githubSSHKey").str).toString,
-      gitlabSSHKey = os.temp(config("gitlabSSHKey").str).toString,
-      mirrorDirectory = os.Path(config("mirrorDirectory").str),
+      githubUrl = githubUrl,
+      gitlabUrl = gitlabUrl,
+      githubToken = githubToken,
+      gitlabToken = gitlabToken,
+      githubSSHKey = githubSSHKey,
+      gitlabSSHKey = gitlabSSHKey,
+      mirrorDirectory = mirrorDirectory,
       user = user,
       repo = repo
     )
   }
 
-  val config = ujson.read(os.read(os.Path(args(0), os.pwd)))
-  val forkJoinPool = new java.util.concurrent.ForkJoinPool(config("threads").numOpt.getOrElse(32.0).toInt)
-  val githubUrl = config("githubUrl").str
-  val githubAPI = s"https://api.$githubUrl"
-  val githubToken = config("githubToken").str
+  def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----"
+
+  val config = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
+
+  val githubUrl = config.getOrElse("githubUrl", Str("github.com")).str
+  val gitlabUrl = config.getOrElse("gitlabUrl", Str("localhost")).str
+  val githubToken = config.getOrElse("githubToken", Str("")).str
+  val gitlabToken = config.getOrElse("gitlabToken", Str("")).str
+  val githubSSHKey = os.temp(sshString(config.getOrElse("githubSSHKey", Str("")).str)).toString
+  val gitlabSSHKey = os.temp(sshString(config.getOrElse("gitlabSSHKey", Str("")).str)).toString
+  val mirrorDirectory = os.Path(config.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
+  val originationRepos = config.getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
+  val standaloneRepos = config.getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
+  val tasks = (originationRepos ++ standaloneRepos).par
+  val action = config.getOrElse("action", Str("clone")).str
+  val threads = config.getOrElse("threads", Num(64.0)).num.toInt
+
   val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
-  val tasks = (config("origination").arr.map(_.str).flatMap(repos) ++ config("repository").arr.map(_.str).map(r => repos(r.split('/')))).par
+  val githubAPI = s"https://api.$githubUrl"
+
+  val forkJoinPool = new java.util.concurrent.ForkJoinPool(threads)
   tasks.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
-  tasks.map(r => config("action").strOpt.getOrElse("clone") match {
-    case "clone" => r.gitClone
+  tasks.map(r => action match {
+    case "clone" => r.githubClone
+    case "fetch" => r.githubFetch
+    case "push" => r.gitlabPush
     case "mirror" => r.mirror
     case "sync" => r.sync
   })
