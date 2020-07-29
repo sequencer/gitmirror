@@ -66,6 +66,8 @@ case class Repository(githubUrl: String,
     "GIT_SSH_COMMAND" -> s"ssh -i $gitlabSSHKey"
   )
 
+  def getHash = os.list(wd / "objects" / "pack").hashCode
+
   def githubSSHUrl = s"git@$githubUrl:$user/$repo.git"
 
   def gitlabSSHUrl = s"git@$gitlabUrl:$user/$repo.git"
@@ -84,14 +86,15 @@ case class Repository(githubUrl: String,
     os.proc("git", "clone", "--mirror", githubSSHUrl, wd.toString).call(wd, env = githubSSHEnv)
   }
 
-  def githubFetch = os.proc("git", "fetch", "--all").call(wd, env = githubSSHEnv)
+  def githubFetch = {
+    val oldHash = getHash
+    os.proc("git", "fetch", "--all").call(wd, env = githubSSHEnv)
+    getHash != oldHash
+  }
 
   def gitlabPush = os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = gitlabSSHEnv)
 
-  def sync = {
-    githubFetch
-    gitlabPush
-  }
+  def sync = if(githubFetch) gitlabPush
 }
 
 
