@@ -1,5 +1,7 @@
 package gitmirror
 
+import java.util.Calendar
+
 import ujson._
 
 import scala.collection.parallel.CollectionConverters._
@@ -66,35 +68,51 @@ case class Repository(githubUrl: String,
     "GIT_SSH_COMMAND" -> s"ssh -i $gitlabSSHKey"
   )
 
-  def getHash = os.list(wd / "objects" / "pack").hashCode
+  def getHash = os.list(wd / "objects" / "pack").filter(_.ext == "idx").map(_.last.slice(5, 45)).mkString
 
   def githubSSHUrl = s"git@$githubUrl:$user/$repo.git"
 
   def gitlabSSHUrl = s"git@$gitlabUrl:$user/$repo.git"
 
-  def mirror = {
-    if (!os.isFile(wd / "config")) {
+  def mirror =
+    if (if (os.isFile(wd / "config")) {
+      githubFetch
+    } else {
       githubClone
       gitlabCreateProject(user, repo)
-    }
-    gitlabPush
-  }
+      true
+    }) gitlabPush
 
   def githubClone = {
+    val log = os.temp(Calendar.getInstance().getTime.toString)
     os.remove.all(wd)
     os.makeDir.all(wd)
-    os.proc("git", "clone", "--mirror", githubSSHUrl, wd.toString).call(wd, env = githubSSHEnv)
+    if (os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString).call(wd, env = githubSSHEnv, check = false, stdout = log).exitCode != 0) println(s"$user/$repo clone failed.")
+    os.move(log, wd / "cloneLog.txt")
   }
 
   def githubFetch = {
     val oldHash = getHash
-    os.proc("git", "fetch", "--all").call(wd, env = githubSSHEnv)
+    val log = wd / "fetchLog.txt"
+    os.write.append(log, Calendar.getInstance().getTime.toString)
+    if (os.proc("git", "remote", "update").call(wd, env = githubSSHEnv, check = false, stdout = log).exitCode != 0) println(s"$user/$repo fetch failed.")
+    os.write.append(log, "-" * 64 + "\n\n\n")
+
     getHash != oldHash
   }
 
-  def gitlabPush = os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = gitlabSSHEnv)
+  def gitlabPush = {
+    val log = wd / "pushLog.txt"
+    os.write.append(log, Calendar.getInstance().getTime.toString)
+    if (os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl).call(wd, env = gitlabSSHEnv, check = false, stdout = log).exitCode != 0) println(s"$user/$repo push failed.")
+    os.write.append(log, "-" * 64 + "\n\n\n")
+  }
 
-  def sync = if(githubFetch) gitlabPush
+  def sync = if (githubFetch) {
+    println(s"$user/$repo need update")
+    gitlabPush
+  } else
+    println(s"$user/$repo no need update")
 }
 
 
