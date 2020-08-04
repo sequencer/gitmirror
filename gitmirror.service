@@ -1,0 +1,10 @@
+[Unit]
+Description=Syncing GitHub to GitLab
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/java -jar /usr/bin/gitmirror /etc/gitmirror/config.json
+
+[Install]
+WantedBy=multi-user.target

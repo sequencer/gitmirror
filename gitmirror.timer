@@ -1,0 +1,6 @@
+[Unit]
+Description=Daily locate database update
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true

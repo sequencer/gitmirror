@@ -1,0 +1,13 @@
+{
+  "githubUrl": "???",
+  "gitlabUrl": "???",
+  "githubToken": "???",
+  "githubSSHKey": "???",
+  "gitlabToken": "???",
+  "gitlabSSHKey": "???",
+  "mirrorDirectory": "/var/cache/gitmirror",
+  "origination": [],
+  "repository": [],
+  "action": "fetch",
+  "threads": 64
+}
