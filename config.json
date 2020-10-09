@@ -6,6 +6,7 @@
   "gitlabToken": "???",
   "gitlabSSHKey": "???",
   "mirrorDirectory": "/var/cache/gitmirror",
+  "remoteConfig": "https://raw.githubusercontent.com/this_config_will_override_origination_and_origination",
   "origination": [],
   "repository": [],
   "action": "fetch",

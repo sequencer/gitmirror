@@ -195,23 +195,27 @@ object Main extends App {
 
   def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----\n"
 
-  val config = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
+  val localConfig = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
+  val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).text)).obj
 
-  lazy val githubUrl = config.getOrElse("githubUrl", Str("github.com")).str
-  lazy val gitlabUrl = config.getOrElse("gitlabUrl", Str("localhost")).str
-  lazy val githubToken = config.getOrElse("githubToken", Str("")).str
-  lazy val gitlabToken = config.getOrElse("gitlabToken", Str("")).str
-  lazy val githubSSHKey = os.temp(sshString(config.getOrElse("githubSSHKey", Str("")).str)).toString
-  lazy val gitlabSSHKey = os.temp(sshString(config.getOrElse("gitlabSSHKey", Str("")).str)).toString
-  lazy val mirrorDirectory = os.Path(config.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
-  lazy val originationRepos = config.getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
-  lazy val standaloneRepos = config.getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
+  /* local config only */
+  lazy val githubUrl = localConfig.getOrElse("githubUrl", Str("github.com")).str
+  lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("localhost")).str
+  lazy val githubToken = localConfig.getOrElse("githubToken", Str("")).str
+  lazy val gitlabToken = localConfig.getOrElse("gitlabToken", Str("")).str
+  lazy val action = localConfig.getOrElse("action", Str("clone")).str
+  lazy val threads = localConfig.getOrElse("threads", Num(64.0)).num.toInt
+  lazy val githubSSHKey = os.temp(sshString(localConfig.getOrElse("githubSSHKey", Str("")).str)).toString
+  lazy val gitlabSSHKey = os.temp(sshString(localConfig.getOrElse("gitlabSSHKey", Str("")).str)).toString
+  lazy val mirrorDirectory = os.Path(localConfig.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
+
+  /* remote will override local. */
+  lazy val originationRepos = (localConfig ++ remoteConfig).getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
+  lazy val standaloneRepos = (localConfig ++ remoteConfig).getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
+
   lazy val tasks = (originationRepos ++ standaloneRepos).par
-  lazy val action = config.getOrElse("action", Str("clone")).str
-  lazy val threads = config.getOrElse("threads", Num(64.0)).num.toInt
   lazy val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
   lazy val githubAPI = s"https://api.$githubUrl"
-
   val forkJoinPool = new java.util.concurrent.ForkJoinPool(threads)
   tasks.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
   tasks.map(r => action match {
