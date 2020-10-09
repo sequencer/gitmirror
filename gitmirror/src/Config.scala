@@ -71,6 +71,7 @@ class Config(localConfigPath: os.Path) {
   lazy val githubSSHKey = os.temp(sshString(localConfig.getOrElse("githubSSHKey", Str("")).str)).toString
   lazy val gitlabSSHKey = os.temp(sshString(localConfig.getOrElse("gitlabSSHKey", Str("")).str)).toString
   lazy val mirrorDirectory = os.Path(localConfig.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
+  lazy val warningTimeout = localConfig.getOrElse("warningTimeout", Num(3600)).num.toInt
 
   /* remote will override local. */
   lazy val originationRepos = (localConfig ++ remoteConfig).getOrElse("origination", Arr()).arr.map(_.str).flatMap(repo)
