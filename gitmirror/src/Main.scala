@@ -92,6 +92,8 @@ case class Repository(githubUrl: String,
     os.remove.all(wd)
     os.makeDir.all(wd)
     val log = new StringBuilder
+    os.write.over(wd / ".fetchTimestamp", "0")
+    os.write.over(wd / ".pushTimestamp", "0")
     if (os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString)
       .call(wd, env = githubSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
       .exitCode == 0) {
@@ -113,6 +115,7 @@ case class Repository(githubUrl: String,
         logger.error(s"failed with ${log.toString}!")
         false
       } else {
+        os.write.over(wd / ".fetchTimestamp", System.currentTimeMillis().toString)
         if (getHash != oldHash) {
           logger.info("need update.")
           logger.info(log.toString)
@@ -133,6 +136,7 @@ case class Repository(githubUrl: String,
       .call(wd, env = gitlabSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
       .exitCode == 0) {
       logger.info(log.toString)
+      os.write.over(wd / ".pushTimestamp", System.currentTimeMillis().toString)
       true
     } else {
       logger.error(s"failed with ${log.toString}.")
@@ -143,8 +147,7 @@ case class Repository(githubUrl: String,
   def sync = if (githubFetch) gitlabPush else false
 }
 
-
-object Main extends App {
+class Config(localConfigPath: os.Path) {
   def pages(url: String) = {
     val pattern = """.*page=(\d+)>.*""".r
     val pattern(a) = requests.get(url + "?q=addClass+user:mozilla", headers = githubAPIHeaders).headers.get("link") match {
@@ -177,7 +180,7 @@ object Main extends App {
   }.toVector
 
   def repos(userrepo: Array[String]) = {
-    require(userrepo.size == 2)
+    require(userrepo.length == 2)
     val user = userrepo.head
     val repo = userrepo.last
     Repository(
@@ -195,7 +198,7 @@ object Main extends App {
 
   def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----\n"
 
-  val localConfig = ujson.read(os.read(os.Path(args(0), os.pwd))).obj
+  val localConfig = ujson.read(os.read(localConfigPath)).obj
   val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).text)).obj
 
   /* local config only */
@@ -213,12 +216,16 @@ object Main extends App {
   lazy val originationRepos = (localConfig ++ remoteConfig).getOrElse("origination", Arr()).arr.map(_.str).flatMap(repos)
   lazy val standaloneRepos = (localConfig ++ remoteConfig).getOrElse("repository", Arr()).arr.map(r => repos(r.str.split('/')))
 
-  lazy val tasks = (originationRepos ++ standaloneRepos).par
   lazy val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
   lazy val githubAPI = s"https://api.$githubUrl"
-  val forkJoinPool = new java.util.concurrent.ForkJoinPool(threads)
-  tasks.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
-  tasks.map(r => action match {
+  lazy val repos = (originationRepos ++ standaloneRepos).par
+}
+
+object Main extends App {
+  val config = new Config(os.Path(args(0), os.pwd))
+  val forkJoinPool = new java.util.concurrent.ForkJoinPool(config.threads)
+  config.repos.tasksupport = new ForkJoinTaskSupport(forkJoinPool)
+  config.repos.map(r => config.action match {
     case "clone" => r.githubClone
     case "fetch" => r.githubFetch
     case "push" => r.gitlabPush
