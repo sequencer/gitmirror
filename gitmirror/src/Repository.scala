@@ -27,6 +27,8 @@ case class Repository(githubUrl: String,
     (buf, _) => stringBuilder.append(new String(buf, StandardCharsets.UTF_8))
   )
 
+  private def now = (System.currentTimeMillis() / 1000).toString
+
   def gitlabCreateGroup(name: String): Response = requests.post(gitlabAPI + "/groups", data = ujson.write(Map(
     "name" -> name,
     "path" -> name,
@@ -117,7 +119,7 @@ case class Repository(githubUrl: String,
         logger.error(s"failed with ${log.toString}!")
         false
       } else {
-        os.write.over(wd / ".fetchTimestamp", System.currentTimeMillis().toString)
+        os.write.over(wd / ".fetchTimestamp", now)
         if (getHash != oldHash) {
           logger.info("need update.")
           logger.info(log.toString)
@@ -138,7 +140,7 @@ case class Repository(githubUrl: String,
       .call(wd, env = gitlabSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
       .exitCode == 0) {
       logger.info(log.toString)
-      os.write.over(wd / ".pushTimestamp", System.currentTimeMillis().toString)
+      os.write.over(wd / ".pushTimestamp", now)
       true
     } else {
       logger.error(s"failed with ${log.toString}.")

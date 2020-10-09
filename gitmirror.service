@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 Environment="GIT_MIRROR_CONFIG_FILE=/etc/gitmirror/config.json"
-ExecStart=/usr/bin/java -cp /usr/bin/gitmirror gitmirror.simple
+ExecStart=/usr/bin/java -cp /usr/bin/gitmirror gitmirror.daemon
 
 [Install]
 WantedBy=multi-user.target

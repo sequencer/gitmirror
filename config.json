@@ -10,5 +10,6 @@
   "origination": [],
   "repository": [],
   "action": "fetch",
-  "threads": 64
+  "threads": 64,
+  "timer": 600
 }

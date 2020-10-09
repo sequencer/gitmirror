@@ -67,6 +67,7 @@ class Config(localConfigPath: os.Path) {
   lazy val gitlabToken = localConfig.getOrElse("gitlabToken", Str("")).str
   lazy val action = localConfig.getOrElse("action", Str("clone")).str
   lazy val threads = localConfig.getOrElse("threads", Num(64.0)).num.toInt
+  lazy val timer = localConfig.getOrElse("timer", Num(600)).num.toLong
   lazy val githubSSHKey = os.temp(sshString(localConfig.getOrElse("githubSSHKey", Str("")).str)).toString
   lazy val gitlabSSHKey = os.temp(sshString(localConfig.getOrElse("gitlabSSHKey", Str("")).str)).toString
   lazy val mirrorDirectory = os.Path(localConfig.getOrElse("mirrorDirectory", Str("/tmp/gitmirror")).str)
