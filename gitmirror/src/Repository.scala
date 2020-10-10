@@ -18,6 +18,7 @@ case class Repository(githubUrl: String,
                       repo: String) {
   def name = s"$user/$repo"
 
+  val dummyGitlab = gitlabUrl == "dummy"
   val githubAPI = s"https://api.$githubUrl"
   val gitlabAPI = s"http://$gitlabUrl/api/v4"
   val gitlabAPIHeaders = Map("Private-Token" -> s"$gitlabToken", "Content-Type" -> "application/json")
@@ -42,7 +43,9 @@ case class Repository(githubUrl: String,
 
   lazy val gitlabLocalPushedAt: Long = os.read(wd / ".pushTimestamp").toLong
 
-  def gitlabCreateGroup(name: String): Response = requests.post(gitlabAPI + "/groups", data = ujson.write(Map(
+  def gitlabCreateGroup(name: String): Boolean = if (dummyGitlab)
+    true
+  else requests.post(gitlabAPI + "/groups", data = ujson.write(Map(
     "name" -> name,
     "path" -> name,
     "visibility" -> "public",
@@ -50,9 +53,11 @@ case class Repository(githubUrl: String,
   )),
     headers = gitlabAPIHeaders,
     check = false
-  )
+  ).is2xx
 
-  def gitlabCreateProject(group: String, name: String): Response = {
+  def gitlabCreateProject(group: String, name: String): Boolean = if (dummyGitlab)
+    true
+  else {
     gitlabCreateGroup(group)
     requests.post(
       gitlabAPI + s"/projects",
@@ -64,19 +69,23 @@ case class Repository(githubUrl: String,
       )),
       headers = gitlabAPIHeaders,
       check = false
-    )
+    ).is2xx
   }
 
-  lazy val gitlabGroups: Map[String, Int] = ujson.read(
-    requests.get(
-      gitlabAPI + "/groups",
-      headers = gitlabAPIHeaders
-    ).bytes
-  )
-    .arr
-    .map {
-      u => u("name").str -> u("id").num.toInt
-    }.toMap
+  lazy val gitlabGroups: Map[String, Int] = if (dummyGitlab)
+    Map()
+  else {
+    ujson.read(
+      requests.get(
+        gitlabAPI + "/groups",
+        headers = gitlabAPIHeaders
+      ).bytes
+    )
+      .arr
+      .map {
+        u => u("name").str -> u("id").num.toInt
+      }.toMap
+  }
 
   val wd: Path = mirrorDirectory / user / repo
 
@@ -139,7 +148,9 @@ case class Repository(githubUrl: String,
     }
   }
 
-  lazy val gitlabPush: Boolean = {
+  lazy val gitlabPush: Boolean = if (dummyGitlab)
+    true
+  else {
     val log = new StringBuilder
     if (os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl)
       .call(wd, env = gitlabSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)

@@ -62,7 +62,7 @@ class Config(localConfigPath: os.Path) {
 
   /* local config only */
   lazy val githubUrl = localConfig.getOrElse("githubUrl", Str("github.com")).str
-  lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("localhost")).str
+  lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("dummy")).str
   lazy val githubToken = localConfig.getOrElse("githubToken", Str("")).str
   lazy val gitlabToken = localConfig.getOrElse("gitlabToken", Str("")).str
   lazy val action = localConfig.getOrElse("action", Str("clone")).str
