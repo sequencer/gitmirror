@@ -15,4 +15,6 @@ object gitmirror extends ScalaModule {
     ivy"com.typesafe.scala-logging::scala-logging:latest.integration",
     ivy"org.slf4j:slf4j-simple:latest.integration"
   )
+
+  def mainClass = Some("gitmirror.simple")
 }
