@@ -58,7 +58,7 @@ class Config(localConfigPath: os.Path) {
   def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----\n"
 
   val localConfig = ujson.read(os.read(localConfigPath)).obj
-  val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).bytes)).get.obj
+  val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).bytes).obj)
   /* local config only */
   lazy val githubUrl = localConfig.getOrElse("githubUrl", Str("github.com")).str
   lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("localhost")).str
@@ -73,8 +73,8 @@ class Config(localConfigPath: os.Path) {
   lazy val warningTimeout = localConfig.getOrElse("warningTimeout", Num(3600)).num.toInt
 
   /* remote will override local. */
-  lazy val originationRepos = (localConfig ++ remoteConfig).getOrElse("origination", Arr()).arr.map(_.str).flatMap(repo)
-  lazy val standaloneRepos = (localConfig ++ remoteConfig).getOrElse("repository", Arr()).arr.map(r => repo(r.str.split('/')))
+  lazy val originationRepos = (localConfig ++ remoteConfig.getOrElse(Map[String,Value]())).getOrElse("origination", Arr()).arr.map(_.str).flatMap(repo)
+  lazy val standaloneRepos = (localConfig ++ remoteConfig.getOrElse(Map[String,Value]())).getOrElse("repository", Arr()).arr.map(r => repo(r.str.split('/')))
 
   lazy val githubAPIHeaders = Map("Authorization" -> s"token $githubToken")
   lazy val githubAPI = s"https://api.$githubUrl"
