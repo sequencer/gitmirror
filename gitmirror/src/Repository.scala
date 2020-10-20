@@ -18,7 +18,6 @@ case class Repository(githubUrl: String,
                       repo: String) {
   def name = s"$user/$repo"
 
-  val dummyGitlab = gitlabUrl == "dummy"
   val githubAPI = s"https://api.$githubUrl"
   val gitlabAPI = s"http://$gitlabUrl/api/v4"
   val gitlabAPIHeaders = Map("Private-Token" -> s"$gitlabToken", "Content-Type" -> "application/json")
@@ -26,7 +25,7 @@ case class Repository(githubUrl: String,
 
   protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(s"$user/$repo"))
 
-  def processOutputTostringBuilder(stringBuilder: StringBuilder): ProcessOutput.ReadBytes = os.ProcessOutput.ReadBytes(
+  def processOutputToStringBuilder(stringBuilder: StringBuilder): ProcessOutput.ReadBytes = os.ProcessOutput.ReadBytes(
     (buf, _) => stringBuilder.append(new String(buf, StandardCharsets.UTF_8))
   )
 
@@ -35,7 +34,7 @@ case class Repository(githubUrl: String,
   lazy val githubRemotePushedAt: Long = ujson.read(requests.get(
     githubAPI + s"/repos/$user/$repo",
     headers = githubAPIHeaders
-  ).bytes).arr.head("pushed_at").strOpt.map(
+  ).bytes)("pushed_at").strOpt.map(
     java.time.Instant.parse(_).getEpochSecond
   ).getOrElse(0)
 
@@ -43,9 +42,7 @@ case class Repository(githubUrl: String,
 
   lazy val gitlabLocalPushedAt: Long = os.read(wd / ".pushTimestamp").toLong
 
-  def gitlabCreateGroup(name: String): Boolean = if (dummyGitlab)
-    true
-  else requests.post(gitlabAPI + "/groups", data = ujson.write(Map(
+  def gitlabCreateGroup(name: String): Response = requests.post(gitlabAPI + "/groups", data = ujson.write(Map(
     "name" -> name,
     "path" -> name,
     "visibility" -> "public",
@@ -53,11 +50,9 @@ case class Repository(githubUrl: String,
   )),
     headers = gitlabAPIHeaders,
     check = false
-  ).is2xx
+  )
 
-  def gitlabCreateProject(group: String, name: String): Boolean = if (dummyGitlab)
-    true
-  else {
+  def gitlabCreateProject(group: String, name: String): Response = {
     gitlabCreateGroup(group)
     requests.post(
       gitlabAPI + s"/projects",
@@ -69,23 +64,19 @@ case class Repository(githubUrl: String,
       )),
       headers = gitlabAPIHeaders,
       check = false
-    ).is2xx
+    )
   }
 
-  lazy val gitlabGroups: Map[String, Int] = if (dummyGitlab)
-    Map()
-  else {
-    ujson.read(
-      requests.get(
-        gitlabAPI + "/groups",
-        headers = gitlabAPIHeaders
-      ).bytes
-    )
-      .arr
-      .map {
-        u => u("name").str -> u("id").num.toInt
-      }.toMap
-  }
+  lazy val gitlabGroups: Map[String, Int] = ujson.read(
+    requests.get(
+      gitlabAPI + "/groups",
+      headers = gitlabAPIHeaders
+    ).bytes
+  )
+    .arr
+    .map {
+      u => u("name").str -> u("id").num.toInt
+    }.toMap
 
   val wd: Path = mirrorDirectory / user / repo
 
@@ -116,11 +107,10 @@ case class Repository(githubUrl: String,
     os.remove.all(wd)
     os.makeDir.all(wd)
     val log = new StringBuilder
-    os.write.over(wd / ".fetchTimestamp", "0")
-    os.write.over(wd / ".pushTimestamp", "0")
     if (os.proc("git", "clone", "--bare", githubSSHUrl, wd.toString)
-      .call(wd, env = githubSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
+      .call(wd, env = githubSSHEnv, check = false, stdout = processOutputToStringBuilder(log), mergeErrIntoOut = true)
       .exitCode == 0) {
+      os.write.over(wd / ".pushTimestamp", "0")
       os.write.over(wd / ".fetchTimestamp", now)
       logger.info(log.toString)
       true
@@ -133,27 +123,27 @@ case class Repository(githubUrl: String,
   lazy val githubFetch: Boolean = {
     val log = new StringBuilder
     if (os.isDir(wd)) {
-      if (githubRemotePushedAt > githubLocalFetchedAt)
+      if (githubRemotePushedAt > githubLocalFetchedAt) {
         if (os.proc("git", "remote", "update")
-          .call(wd, env = githubSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
+          .call(wd, env = githubSSHEnv, check = false, stdout = processOutputToStringBuilder(log), mergeErrIntoOut = true)
           .exitCode != 0) {
-          os.write.over(wd / ".fetchTimestamp", now)
           logger.error(s"failed with ${log.toString}!")
           false
-        } else true
-      else true
+        } else {
+          os.write.over(wd / ".fetchTimestamp", now)
+          true
+        }
+      } else true
     } else {
       logger.error(s"target dir ${wd.toString} not exist fall back to clone.")
       githubClone
     }
   }
 
-  lazy val gitlabPush: Boolean = if (dummyGitlab)
-    true
-  else {
+  lazy val gitlabPush: Boolean = {
     val log = new StringBuilder
     if (os.proc("git", "push", "--mirror", "--force", gitlabSSHUrl)
-      .call(wd, env = gitlabSSHEnv, check = false, stdout = processOutputTostringBuilder(log), mergeErrIntoOut = true)
+      .call(wd, env = gitlabSSHEnv, check = false, stdout = processOutputToStringBuilder(log), mergeErrIntoOut = true)
       .exitCode == 0) {
       logger.info(log.toString)
       os.write.over(wd / ".pushTimestamp", now)

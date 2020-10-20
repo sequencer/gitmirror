@@ -58,11 +58,10 @@ class Config(localConfigPath: os.Path) {
   def sshString(str: String) = s"-----BEGIN OPENSSH PRIVATE KEY-----\n${str}\n-----END OPENSSH PRIVATE KEY-----\n"
 
   val localConfig = ujson.read(os.read(localConfigPath)).obj
-  val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).text)).obj
-
+  val remoteConfig = localConfig.get("remoteConfig").map(u => ujson.read(requests.get(u.str).bytes)).get.obj
   /* local config only */
   lazy val githubUrl = localConfig.getOrElse("githubUrl", Str("github.com")).str
-  lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("dummy")).str
+  lazy val gitlabUrl = localConfig.getOrElse("gitlabUrl", Str("localhost")).str
   lazy val githubToken = localConfig.getOrElse("githubToken", Str("")).str
   lazy val gitlabToken = localConfig.getOrElse("gitlabToken", Str("")).str
   lazy val action = localConfig.getOrElse("action", Str("clone")).str
