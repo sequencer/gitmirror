@@ -133,7 +133,7 @@ case class Repository(githubUrl: String,
           os.write.over(wd / ".fetchTimestamp", now)
           true
         }
-      } else true
+      } else false
     } else {
       logger.error(s"target dir ${wd.toString} not exist fall back to clone.")
       githubClone
